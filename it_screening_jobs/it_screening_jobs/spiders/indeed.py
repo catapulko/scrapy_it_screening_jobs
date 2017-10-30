@@ -10,12 +10,20 @@ class IndeedSpider(scrapy.Spider):
     date_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
     def start_requests(self):
-        base_url = 'http://' + self.website + '/jobs?q='
-        f = open('it_screening_jobs/search_items', 'r')
-        search_term = f.readline().rstrip()
-        while (search_term <> '') and (not search_term.startswith('#')):
-            yield scrapy.Request(base_url+search_term, callback=self.parse_indeed_response, meta={'search_term':search_term})
-            search_term = f.readline().rstrip()
+        f_websites = open('it_screening_jobs/indeed_websites','r')
+        website_country = f_websites.readline().rstrip().split(',')
+        logging.log(logging.DEBUG,website_country)
+        while (len(website_country) > 0) and (not website_country[0].startswith('#')):
+            website,country = website_country
+            base_url = 'http://' + website + '/jobs?q='
+            f_search_terms = open('it_screening_jobs/search_items', 'r')
+            search_term = f_search_terms.readline().rstrip()
+            while (search_term <> '') and (not search_term.startswith('#')):
+                yield scrapy.Request(base_url+search_term, callback=self.parse_indeed_response, meta={'search_term':search_term, 'website': website, 'country': country})
+                search_term = f_search_terms.readline().rstrip()
+            f_search_terms.close()
+            website_country = f_websites.readline().rstrip().split(',')
+        f_websites.close()
 
     def parse_indeed_response(self, response):
         i = IndeedItem()
@@ -25,13 +33,6 @@ class IndeedSpider(scrapy.Spider):
         else:
             i['jobs_number'] = int(response.selector.xpath('//*[@id="searchCount"]').extract()[0].replace(' offerte di lavoro','').split().pop().replace('</div>','').replace(',','').replace('.',''))
         i['search_date_time'] = self.date_time
-        i['website'] = self.website
-        i['country'] = self.country
-        logging.info(i)
+        i['website'] = response.meta.get('website')
+        i['country'] = response.meta.get('country')
         yield i
-
-    def __init__(self, indeed_website=None, country=None, *args, **kwargs):
-        super(IndeedSpider,self).__init__(*args, **kwargs)
-        self.country = country
-        self.website = indeed_website
-        self.allowed_domains = [ indeed_website ]
